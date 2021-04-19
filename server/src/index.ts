@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import "reflect-metadata";
 // import {User} from "./entity/User";
 import express from 'express';
@@ -13,12 +14,19 @@ import { createConnection } from "typeorm";
         res.send('hello')
     })
 
+    // handle refreshing refresh token
+    app.post("/refresh_token", (req) => {
+        console.log(req.headers)
+    })
+
     await createConnection();
 
     const apolloServer = new ApolloServer({
         schema: await buildSchema({
             resolvers: [UserResolver]
-        })
+        }),
+        // pass res to graphql through context of Apollo
+        context: ({ req, res }) => ({ req, res })
     })
 
     apolloServer.applyMiddleware({ app })
