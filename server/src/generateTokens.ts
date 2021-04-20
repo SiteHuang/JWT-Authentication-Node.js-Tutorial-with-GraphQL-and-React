@@ -7,8 +7,9 @@ export const createAccessToken = (user: User) => {
     })
 }
 
+// Although the token version is incremented, the user can still access the access token for 15m
 export const createRefreshToken = (user: User) => {
-    return sign({ userId: user.id }, process.env.REFRESH_TOKEN_SECRET!, {
+    return sign({ userId: user.id, tokenVersion: user.tokenVersion }, process.env.REFRESH_TOKEN_SECRET!, {
         expiresIn: '7d'
     })
 }

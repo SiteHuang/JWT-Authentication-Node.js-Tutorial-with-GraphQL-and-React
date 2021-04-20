@@ -6,17 +6,56 @@ import { ApolloServer } from 'apollo-server-express';
 import { buildSchema } from "type-graphql";
 import { UserResolver } from "./UserResolver";
 import { createConnection } from "typeorm";
+import cookieParser from 'cookie-parser';
+import { verify } from 'jsonwebtoken';
+import {User} from './entity/User';
+import { createAccessToken, createRefreshToken } from './generateTokens';
+import { sendRefreshToken } from './sendRefreshToken';
 
 
 (async () => {
     const app = express();
+
+    app.use(cookieParser());
+
     app.get('/', (_req, res) => {
         res.send('hello')
     })
 
     // handle refreshing refresh token
-    app.post("/refresh_token", (req) => {
-        console.log(req.headers)
+    app.post("/refresh_token", async (req, res) => {
+        // get refresh token from cookie
+        const token = req.cookies.refreshToken;
+        if(!token) {
+            return res.send({ok: false, accessToken: ''})
+        }
+        // token is not expired
+        let payload = null;
+        try {
+            // verify refresh token from cookie
+            payload = verify(token, process.env.REFRESH_TOKEN_SECRET!) as any;
+        } catch (error) {
+            console.log(error)
+            return res.send({ok: false, accessToken: ''})
+        }
+        // token is valid and we can send back an access token
+        const user = await User.findOne({id: payload.userId});
+
+        if (!user) {
+            return res.send({ ok: false, accessToken: ''})
+        }
+
+        // Verify the token version is matched
+        if(user.tokenVersion !== payload.tokenVersion) {
+            return res.send({ ok: false, accessToken: ''})
+        }
+
+        // recreate a refreshToken and send through cookies
+        // refreshToken is expired in 7d, so we renew the refreshToken
+        sendRefreshToken(res, createRefreshToken(user));
+
+        // we create an access token and send through data
+        return res.send({ok: true, accessToken: createAccessToken(user)})
     })
 
     await createConnection();
@@ -31,9 +70,16 @@ import { createConnection } from "typeorm";
 
     apolloServer.applyMiddleware({ app })
 
-    app.listen(4000, () => {
+    const server = app.listen(4000, () => {
         console.log('express server started');
     })
+
+    //   Handle unhandled promise rejections
+    process.on('unhandledRejection', (err) => {
+        console.log(`Error: ${err}`);
+        // Close server & exit process
+        server.close(() => process.exit(1));
+    });
 })();
 
 // createConnection().then(async connection => {

@@ -1,9 +1,11 @@
-import { Arg, Ctx, Field, Mutation, ObjectType, Query, Resolver, UseMiddleware } from 'type-graphql';
+import { Arg, Ctx, Field, Int, Mutation, ObjectType, Query, Resolver, UseMiddleware } from 'type-graphql';
 import { User } from './entity/User';
 import { compare, hash } from 'bcryptjs';
 import { MyContext } from './MyContext';
-import { createAccessToken, createRefreshToken } from './auth';
+import { createAccessToken, createRefreshToken } from './generateTokens';
 import { isAuth } from './isAuth';
+import { sendRefreshToken } from './sendRefreshToken';
+import { getConnection } from 'typeorm';
 
 @ObjectType()
 class LoginResponse {
@@ -19,7 +21,7 @@ export class UserResolver {
     }
     
     @Query(() => String)
-    @UseMiddleware(isAuth)
+    @UseMiddleware(isAuth) //middleware authentication
     bye(
         @Ctx() {payload}: MyContext
     ) {
@@ -29,6 +31,18 @@ export class UserResolver {
     @Query(() => [User])
     users() {
         return User.find();
+    }
+
+    // increment the version number of db
+    @Mutation(() => Boolean)
+    async revokeRefreshTokensForUser(
+        @Arg('userId', () => Int) userId : number
+    ) {
+        await getConnection().getRepository(User).increment({
+            id: userId
+        }, "tokenVersion", 1)
+
+        return true;
     }
 
     // Return Promise as LoginResponse type
@@ -50,10 +64,7 @@ export class UserResolver {
         }
 
         // login successfully
-
-        ctx.res.cookie('mycookie', createRefreshToken(user), {
-            httpOnly: true, // cannot be accessed by JS,
-        })
+        sendRefreshToken(ctx.res, createRefreshToken(user))
 
         return {
             accessToken: createAccessToken(user)

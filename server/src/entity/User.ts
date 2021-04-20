@@ -3,7 +3,7 @@ import {Entity, PrimaryGeneratedColumn, Column, BaseEntity} from "typeorm";
 
 // Databse table
 @ObjectType()
-@Entity("users")
+@Entity("users") // create a users table
 export class User extends BaseEntity {
     @Field(() => Int) // It can't infer number, need to specify it's an integer or a float
     @PrimaryGeneratedColumn()
@@ -16,5 +16,8 @@ export class User extends BaseEntity {
 
     @Column('text')
     password: string;
+
+    @Column('int', {default: 0})
+    tokenVersion: number;
 }
 
